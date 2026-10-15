@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Motion Story - Mall Perfume Search</title>
+    <!-- Tailwind CSS for UI controls -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Three.js for 3D rendering -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- GSAP for smooth timeline animations -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;800&display=swap');
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            margin: 0;
+            overflow: hidden;
+            background-color: #0f172a;
+            color: #f8fafc;
+        }
+        canvas {
+            outline: none;
+            display: block;
+        }
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.75);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+        }
+        .text-glow {
+            text-shadow: 0 0 12px rgba(244, 63, 94, 0.6);
+        }
+    </style>
+</head>
+<body class="w-screen h-screen relative select-none">
+
+    <!-- 3D Canvas Container -->
+    <div id="canvas-container" class="w-full h-full absolute inset-0 z-0"></div>
+
+    <!-- Top Navigation Bar -->
+    <header class="absolute top-4 left-4 right-4 z-10 flex justify-between items-center pointer-events-none">
+        <div class="glass-panel px-5 py-2.5 rounded-2xl flex items-center space-x-3 pointer-events-auto shadow-2xl">
+            <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-500 via-rose-500 to-amber-400 flex items-center justify-center font-bold text-white shadow-lg">
+                ✨
+            </div>
+            <div>
+                <h1 class="text-sm font-bold tracking-wide text-white">MALL PERFUME HUNT 3D</h1>
+                <p class="text-[10px] text-slate-400 font-medium">Ultra Smooth Animation + AI Voiceover</p>
+            </div>
+        </div>
+
+        <!-- Export, Audio & Settings Buttons -->
+        <div class="glass-panel p-1.5 rounded-2xl flex items-center space-x-2 pointer-events-auto shadow-2xl">
+            <!-- Audio Toggle Button -->
+            <button id="btn-audio-toggle" class="p-2 bg-slate-800/80 hover:bg-slate-700 text-rose-300 rounded-xl flex items-center justify-center transition-all shadow-md">
+                <i id="audio-icon" data-lucide="volume-2" class="w-4 h-4"></i>
+            </button>
+            <button id="btn-export" class="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white text-xs font-semibold rounded-xl flex items-center space-x-2 transition-all shadow-lg active:scale-95">
+                <i data-lucide="video" class="w-4 h-4"></i>
+                <span id="export-text">Export Video (.webm)</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Subtitle / Story Caption Overlay -->
+    <div class="absolute bottom-24 left-1/2 -translate-x-1/2 z-10 w-11/12 max-w-xl text-center pointer-events-none">
+        <div id="caption-box" class="glass-panel px-6 py-3.5 rounded-2xl transition-all duration-500 transform translate-y-2 opacity-0 shadow-2xl border border-rose-500/30 flex items-center justify-center space-x-3">
+            <span class="inline-block w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping"></span>
+            <p id="caption-text" class="text-sm md:text-base font-semibold text-rose-100 tracking-wide text-glow">
+                Berjalan menyusuri lorong mall mewah mencari aroma parfum eksklusif...
+            </p>
+        </div>
+    </div>
+
+    <!-- Playback Control Bar -->
+    <div class="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 w-11/12 max-w-2xl glass-panel p-3 rounded-2xl flex items-center space-x-4 shadow-2xl">
+        <button id="btn-play-pause" class="w-10 h-10 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white flex items-center justify-center transition-all active:scale-90 shadow-md">
+            <i id="play-icon" data-lucide="pause" class="w-5 h-5"></i>
+        </button>
+
+        <div class="flex-1 flex flex-col justify-center space-y-1">
+            <input id="timeline-slider" type="range" min="0" max="100" value="0" step="0.1" class="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-500">
+            <div class="flex justify-between text-[10px] text-slate-400 font-medium">
+                <span id="time-current">00:00</span>
+                <span id="scene-tag" class="text-indigo-400 font-semibold">Scene 1: Entering Mall</span>
+                <span id="time-total">00:20</span>
+            </div>
+        </div>
+
+        <button id="btn-replay" class="p-2.5 rounded-xl hover:bg-slate-800/60 text-slate-300 transition-all">
+            <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+        </button>
+    </div>
+
+    <!-- Render/Export Progress Modal -->
+    <div id="export-modal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="glass-panel p-6 rounded-3xl max-w-sm w-full text-center space-y-4 shadow-2xl border border-indigo-500/30">
+            <div class="w-16 h-16 mx-auto rounded-full bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400 animate-pulse">
+                <i data-lucide="film" class="w-8 h-8"></i>
+            </div>
+            <div>
+                <h3 class="text-base font-bold text-white">Rendering Animation</h3>
+                <p class="text-xs text-slate-400 mt-1">Capturing high-quality 60FPS video with audio sync...</p>
+            </div>
+            <div class="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden">
+                <div id="export-progress-bar" class="bg-gradient-to-r from-indigo-500 to-rose-500 h-full w-0 transition-all duration-100"></div>
+            </div>
+            <p id="export-status" class="text-xs font-mono text-indigo-300">0% completed</p>
+        </div>
+    </div>
+
+    <script>
+        // --- LUCIDE ICONS INIT ---
+        lucide.createIcons();
+
+        // --- GLOBAL VARIABLES & SCENE SETUP ---
+        const container = document.getElementById('canvas-container');
+        const DURATION = 20; // 20 Seconds smooth cinematic story
+        
+        let scene, camera, renderer, clock;
+        let characterGroup, characterHead, characterBody, leftArm, rightArm, leftLeg, rightLeg;
+        let perfumeBottle, sprayParticles = [], sparkleParticles = [];
+        let lightA, lightB, ambientLight;
+        let soundEnabled = true;
+
+        // Audio Context & Web Speech AI Voiceover
+        let audioCtx;
+        const speechSynth = window.speechSynthesis;
+        let isVoiceoverActive = true;
+
+        // MediaRecorder Variables
+        let mediaRecorder;
+        let recordedChunks = [];
+        let isExporting = false;
+
+        // GSAP Master Timeline
+        let masterTL;
+
+        // Scene elements
+        let mallPillars = [];
+        let perfumeCounters = [];
+
+        // Story Script & Captions
+        const storyScript = [
+            { time: 0, caption: "Berjalan menyusuri lorong mall mewah mencari aroma parfum eksklusif...", voice: "Sedang berjalan menyusuri lorong mall mewah untuk mencari parfum impian.", scene: "Scene 1: Menelusuri Mall" },
+            { time: 6, caption: "Menemukan etalase Rose Crystal Perfume yang menawan!", voice: "Akhirnya menemukan etalase parfum eksklusif Rose Crystal yang menawan.", scene: "Scene 2: Menemukan Etalase" },
+            { time: 11, caption: "Menguji semprotan aroma wangi yang sangat menyegarkan...", voice: "Cobain semprotan parfumnya... Wah, aroma keharumannya sangat segar dan elegan!", scene: "Scene 3: Menyemprot Parfum" },
+            { time: 16, caption: "Wangi yang sempurna! Pilihan tepat untuk hari ini.", voice: "Wangi yang sempurna! Parfum ini sangat cocok dan siap dibawa pulang.", scene: "Scene 4: Parfum Impian" }
+        ];
+
+        function initAudioSynth() {
+            if (!audioCtx) {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                audioCtx = new AudioContext();
+            }
+        }
+
+        // Procedural Audio Synthesizer for Sound Effects
+        function playSoundEffect(type) {
+            if (!soundEnabled) return;
+            initAudioSynth();
+            if (!audioCtx) return;
+
+            const now = audioCtx.currentTime;
+
+            if (type === 'footstep') {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(120, now);
+                osc.frequency.exponentialRampToValueAtTime(30, now + 0.12);
+                gain.gain.setValueAtTime(0.15, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(now);
+                osc.stop(now + 0.12);
+            } else if (type === 'spray') {
+                // White noise spray simulation
+                const bufferSize = audioCtx.sampleRate * 0.6;
+                const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+                const output = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    output[i] = Math.random() * 2 - 1;
+                }
+                const whiteNoise = audioCtx.createBufferSource();
+                whiteNoise.buffer = buffer;
+
+                const filter = audioCtx.createBiquadFilter();
+                filter.type = 'bandpass';
+                filter.frequency.setValueAtTime(3000, now);
+                filter.Q.setValueAtTime(3, now);
+
+                const gain = audioCtx.createGain();
+                gain.gain.setValueAtTime(0.01, now);
+                gain.gain.linearRampToValueAtTime(0.25, now + 0.05);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+
+                whiteNoise.connect(filter);
+                filter.connect(gain);
+                gain.connect(audioCtx.destination);
+                whiteNoise.start(now);
+            } else if (type === 'sparkle') {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(800, now);
+                osc.frequency.exponentialRampToValueAtTime(1600, now + 0.3);
+                gain.gain.setValueAtTime(0.1, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(now);
+                osc.stop(now + 0.3);
+            }
+        }
+
+        function triggerVoiceover(text) {
+            if (!soundEnabled || !('speechSynthesis' in window)) return;
+            speechSynth.cancel(); // Stop previous voiceover
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = 'id-ID'; // Indonesian voiceover
+            utterance.rate = 1.0;
+            utterance.pitch = 1.1;
+            speechSynth.speak(utterance);
+        }
+
+        function init3D() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0a0c16);
+            scene.fog = new THREE.FogExp2(0x0a0c16, 0.03);
+
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+            camera.position.set(0, 2.5, 8);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, preserveDrawingBuffer: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.25;
+            container.appendChild(renderer.domElement);
+
+            clock = new THREE.Clock();
+
+            // Dynamic Lights
+            ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+            scene.add(ambientLight);
+
+            lightA = new THREE.SpotLight(0xffedd5, 3.5);
+            lightA.position.set(5, 12, 5);
+            lightA.castShadow = true;
+            lightA.shadow.mapSize.width = 2048;
+            lightA.shadow.mapSize.height = 2048;
+            scene.add(lightA);
+
+            lightB = new THREE.PointLight(0x818cf8, 2.5, 20);
+            lightB.position.set(-6, 4, -2);
+            scene.add(lightB);
+
+            // Build Mall Environment & Dynamic Props
+            createEnvironment();
+            createCharacter();
+            createPerfumeCounter();
+            createParticles();
+
+            // Setup GSAP Timeline
+            buildStoryTimeline();
+
+            // Event Listeners
+            window.addEventListener('resize', onWindowResize);
+            setupUIControls();
+        }
+
+        function createEnvironment() {
+            // Reflective Mall Floor
+            const floorGeo = new THREE.PlaneGeometry(60, 60);
+            const floorMat = new THREE.MeshStandardMaterial({
+                color: 0x0f172a,
+                roughness: 0.08,
+                metalness: 0.85
+            });
+            const floor = new THREE.Mesh(floorGeo, floorMat);
+            floor.rotation.x = -Math.PI / 2;
+            floor.receiveShadow = true;
+            scene.add(floor);
+
+            // Floor Tile Grid Lines
+            const grid = new THREE.GridHelper(60, 30, 0x475569, 0x1e293b);
+            grid.position.y = 0.01;
+            scene.add(grid);
+
+            // Pillars with Gold Trim
+            const pillarGeo = new THREE.CylinderGeometry(0.65, 0.65, 12, 24);
+            const pillarMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.2, metalness: 0.5 });
+            const goldRingGeo = new THREE.CylinderGeometry(0.68, 0.68, 0.15, 24);
+            const goldRingMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.1, metalness: 0.9 });
+
+            for (let z = -20; z <= 20; z += 10) {
+                const pillarLeft = new THREE.Mesh(pillarGeo, pillarMat);
+                pillarLeft.position.set(-6, 6, z);
+                pillarLeft.castShadow = true;
+
+                const ringL = new THREE.Mesh(goldRingGeo, goldRingMat);
+                ringL.position.set(0, -2, 0);
+                pillarLeft.add(ringL);
+
+                scene.add(pillarLeft);
+
+                const pillarRight = pillarLeft.clone();
+                pillarRight.position.x = 6;
+                scene.add(pillarRight);
+
+                mallPillars.push(pillarLeft, pillarRight);
+            }
+        }
+
+        function createCharacter() {
+            characterGroup = new THREE.Group();
+
+            const skinMat = new THREE.MeshStandardMaterial({ color: 0xfbcfe8, roughness: 0.4 });
+            const clothMat = new THREE.MeshStandardMaterial({ color: 0x6366f1, roughness: 0.3 }); // Vibrant Hoodie
+            const pantsMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.5 });
+            const hairMat = new THREE.MeshStandardMaterial({ color: 0x312e81, roughness: 0.8 });
+
+            // Torso
+            const bodyGeo = new THREE.CylinderGeometry(0.35, 0.3, 1.1, 16);
+            characterBody = new THREE.Mesh(bodyGeo, clothMat);
+            characterBody.position.y = 1.25;
+            characterBody.castShadow = true;
+            characterGroup.add(characterBody);
+
+            // Head
+            const headGeo = new THREE.SphereGeometry(0.38, 32, 32);
+            characterHead = new THREE.Mesh(headGeo, skinMat);
+            characterHead.position.y = 2.05;
+            characterHead.castShadow = true;
+            characterGroup.add(characterHead);
+
+            // Hair
+            const hairGeo = new THREE.SphereGeometry(0.4, 16, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+            const hair = new THREE.Mesh(hairGeo, hairMat);
+            hair.position.set(0, 2.1, 0.02);
+            characterGroup.add(hair);
+
+            // Eyes
+            const eyeGeo = new THREE.SphereGeometry(0.04, 8, 8);
+            const eyeMat = new THREE.MeshBasicMaterial({ color: 0x0f172a });
+            const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
+            leftEye.position.set(-0.12, 2.08, 0.34);
+            const rightEye = leftEye.clone();
+            rightEye.position.x = 0.12;
+            characterGroup.add(leftEye, rightEye);
+
+            // Arms with Shoulder Pivots
+            const armGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.8, 12);
+            armGeo.translate(0, -0.4, 0);
+
+            leftArm = new THREE.Mesh(armGeo, clothMat);
+            leftArm.position.set(-0.45, 1.7, 0);
+            leftArm.castShadow = true;
+
+            rightArm = new THREE.Mesh(armGeo, clothMat);
+            rightArm.position.set(0.45, 1.7, 0);
+            rightArm.castShadow = true;
+
+            characterGroup.add(leftArm, rightArm);
+
+            // Legs
+            const legGeo = new THREE.CylinderGeometry(0.1, 0.09, 0.8, 12);
+            legGeo.translate(0, -0.4, 0);
+
+            leftLeg = new THREE.Mesh(legGeo, pantsMat);
+            leftLeg.position.set(-0.18, 0.7, 0);
+            leftLeg.castShadow = true;
+
+            rightLeg = new THREE.Mesh(legGeo, pantsMat);
+            rightLeg.position.set(0.18, 0.7, 0);
+            rightLeg.castShadow = true;
+
+            characterGroup.add(leftLeg, rightLeg);
+
+            characterGroup.position.set(0, 0, -8);
+            scene.add(characterGroup);
+        }
+
+        function createPerfumeCounter() {
+            const counterGroup = new THREE.Group();
+
+            // Glass Display Stand
+            const baseGeo = new THREE.BoxGeometry(3, 1, 1.5);
+            const baseMat = new THREE.MeshStandardMaterial({ color: 0x020617, roughness: 0.1, metalness: 0.9 });
+            const base = new THREE.Mesh(baseGeo, baseMat);
+            base.position.y = 0.5;
+            base.castShadow = true;
+            base.receiveShadow = true;
+            counterGroup.add(base);
+
+            // Glowing Counter Top
+            const topGeo = new THREE.BoxGeometry(3.1, 0.08, 1.6);
+            const topMat = new THREE.MeshStandardMaterial({ color: 0xf43f5e, emissive: 0xe11d48, emissiveIntensity: 0.8 });
+            const top = new THREE.Mesh(topGeo, topMat);
+            top.position.y = 1.04;
+            counterGroup.add(top);
+
+            // Hero Perfume Bottle
+            perfumeBottle = new THREE.Group();
+
+            const bottleBodyGeo = new THREE.CylinderGeometry(0.18, 0.18, 0.45, 12);
+            const glassMat = new THREE.MeshPhysicalMaterial({
+                color: 0xfb7185,
+                transmission: 0.95,
+                opacity: 1,
+                transparent: true,
+                roughness: 0.02,
+                ior: 1.52
+            });
+            const bottleBody = new THREE.Mesh(bottleBodyGeo, glassMat);
+            bottleBody.position.y = 1.28;
+            bottleBody.castShadow = true;
+            perfumeBottle.add(bottleBody);
+
+            const capGeo = new THREE.BoxGeometry(0.15, 0.15, 0.15);
+            const goldMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, metalness: 0.95, roughness: 0.05 });
+            const cap = new THREE.Mesh(capGeo, goldMat);
+            cap.position.y = 1.55;
+            perfumeBottle.add(cap);
+
+            counterGroup.add(perfumeBottle);
+            counterGroup.position.set(0, 0, 0);
+
+            scene.add(counterGroup);
+        }
+
+        function createParticles() {
+            // Fragrance Spray Mist
+            const particleGeo = new THREE.SphereGeometry(0.02, 6, 6);
+            const particleMat = new THREE.MeshBasicMaterial({
+                color: 0xfbcfe8,
+                transparent: true,
+                opacity: 0.8
+            });
+
+            for (let i = 0; i < 50; i++) {
+                const p = new THREE.Mesh(particleGeo, particleMat.clone());
+                p.visible = false;
+                scene.add(p);
+                sprayParticles.push({
+                    mesh: p,
+                    vx: (Math.random() - 0.5) * 0.03,
+                    vy: Math.random() * 0.02 + 0.01,
+                    vz: Math.random() * 0.04 + 0.02,
+                    life: 0
+                });
+            }
+
+            // Magical Sparkles
+            const sparkleGeo = new THREE.OctahedronGeometry(0.03, 0);
+            const sparkleMat = new THREE.MeshBasicMaterial({ color: 0xfef08a, transparent: true, opacity: 0.9 });
+
+            for (let i = 0; i < 20; i++) {
+                const s = new THREE.Mesh(sparkleGeo, sparkleMat);
+                s.position.set((Math.random() - 0.5) * 1.5, 1.2 + Math.random() * 0.8, (Math.random() - 0.5) * 1.5);
+                s.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, 0);
+                scene.add(s);
+                sparkleParticles.push(s);
+            }
+        }
+
+        function buildStoryTimeline() {
+            masterTL = gsap.timeline({ paused: true, onUpdate: updateUIProgress });
+
+            const captionBox = document.getElementById('caption-box');
+            const captionText = document.getElementById('caption-text');
+            const sceneTag = document.getElementById('scene-tag');
+
+            function triggerSceneStep(stepIndex) {
+                const step = storyScript[stepIndex];
+                gsap.to(captionBox, { opacity: 0, y: 10, duration: 0.3, onComplete: () => {
+                    captionText.innerText = step.caption;
+                    if (step.scene) sceneTag.innerText = step.scene;
+                    gsap.to(captionBox, { opacity: 1, y: 0, duration: 0.4 });
+                }});
+                triggerVoiceover(step.voice);
+            }
+
+            // === SCENE 1: Walking down the Mall Corridor (0s - 6s) ===
+            masterTL.add(() => triggerSceneStep(0), 0);
+
+            // Smooth Camera Track
+            masterTL.to(camera.position, { x: 2, y: 2.2, z: 4, duration: 6, ease: "power1.inOut" }, 0);
+            masterTL.to(camera.rotation, { x: -0.1, y: 0.3, z: 0, duration: 6, ease: "power1.inOut" }, 0);
+
+            // Character Walk forward
+            masterTL.to(characterGroup.position, { z: -1.5, duration: 6, ease: "linear" }, 0);
+
+            // Smooth Limb Walking Cycle
+            const walkCycle = gsap.timeline({ repeat: 7, yoyo: true });
+            walkCycle.to(leftLeg.rotation, { x: 0.5, duration: 0.4, ease: "sine.inOut" }, 0)
+                     .to(rightLeg.rotation, { x: -0.5, duration: 0.4, ease: "sine.inOut" }, 0)
+                     .to(leftArm.rotation, { x: -0.4, duration: 0.4, ease: "sine.inOut" }, 0)
+                     .to(rightArm.rotation, { x: 0.4, duration: 0.4, ease: "sine.inOut" }, 0)
+                     .add(() => playSoundEffect('footstep'), 0);
+            
+            masterTL.add(walkCycle, 0);
+
+            // === SCENE 2: Approaching Counter & Spotting Perfume (6s - 11s) ===
+            masterTL.add(() => {
+                gsap.to([leftLeg.rotation, rightLeg.rotation, leftArm.rotation, rightArm.rotation], { x: 0, duration: 0.3 });
+                triggerSceneStep(1);
+                playSoundEffect('sparkle');
+            }, 6);
+
+            // Cinematic Close-up Focus Camera
+            masterTL.to(camera.position, { x: 0, y: 1.5, z: 1.8, duration: 4, ease: "power2.inOut" }, 6);
+            masterTL.to(camera.rotation, { x: -0.1, y: 0, z: 0, duration: 4, ease: "power2.inOut" }, 6);
+
+            // Floating Glow Perfume Effect
+            masterTL.to(perfumeBottle.position, { y: 0.15, duration: 2, ease: "sine.inOut", yoyo: true, repeat: 1 }, 6.5);
+            masterTL.to(perfumeBottle.rotation, { y: Math.PI * 2, duration: 4, ease: "power1.inOut" }, 6.5);
+
+            // === SCENE 3: Testing / Spraying Perfume (11s - 16s) ===
+            masterTL.add(() => triggerSceneStep(2), 11);
+
+            // Hand Reach Animation
+            masterTL.to(rightArm.rotation, { x: -1.2, z: -0.3, duration: 1, ease: "back.out(1.7)" }, 11);
+
+            // Camera Side Angle
+            masterTL.to(camera.position, { x: -1.2, y: 1.4, z: 1.2, duration: 3, ease: "power2.inOut" }, 11.5);
+            masterTL.to(camera.rotation, { x: 0, y: -0.8, z: 0, duration: 3, ease: "power2.inOut" }, 11.5);
+
+            // Trigger Particle Spray & SFX
+            masterTL.add(() => {
+                triggerSprayEffect();
+                playSoundEffect('spray');
+            }, 12.5);
+
+            // === SCENE 4: Celebration & Outro (16s - 20s) ===
+            masterTL.add(() => {
+                triggerSceneStep(3);
+                playSoundEffect('sparkle');
+            }, 16);
+
+            // Character Joy Reaction
+            masterTL.to(characterHead.rotation, { z: 0.2, y: -0.2, duration: 1, ease: "sine.inOut" }, 16);
+            masterTL.to(leftArm.rotation, { x: -1.0, z: 0.4, duration: 1, ease: "back.out(1.5)" }, 16.5);
+
+            // Cinematic Outro Pullback
+            masterTL.to(camera.position, { x: 0, y: 2.2, z: 5, duration: 3.5, ease: "power3.out" }, 16.5);
+            masterTL.to(camera.rotation, { x: -0.15, y: 0, z: 0, duration: 3.5, ease: "power3.out" }, 16.5);
+        }
+
+        function triggerSprayEffect() {
+            sprayParticles.forEach((p) => {
+                p.mesh.position.set(0, 1.4, 0.2);
+                p.mesh.visible = true;
+                p.life = 1.0;
+                p.vx = (Math.random() - 0.5) * 0.02;
+                p.vy = Math.random() * 0.02 + 0.01;
+                p.vz = Math.random() * 0.04 + 0.02;
+            });
+        }
+
+        function updateParticles(delta) {
+            sprayParticles.forEach(p => {
+                if (p.mesh.visible) {
+                    p.mesh.position.x += p.vx;
+                    p.mesh.position.y += p.vy;
+                    p.mesh.position.z += p.vz;
+                    p.life -= delta * 1.5;
+                    p.mesh.material.opacity = p.life;
+
+                    if (p.life <= 0) p.mesh.visible = false;
+                }
+            });
+
+            // Rotate sparkles softly
+            sparkleParticles.forEach(s => {
+                s.rotation.y += delta * 1.5;
+            });
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = clock.getDelta();
+            updateParticles(delta);
+            renderer.render(scene, camera);
+        }
+
+        function updateUIProgress() {
+            if (masterTL) {
+                const progress = masterTL.progress();
+                const currentTime = (progress * DURATION).toFixed(1);
+                
+                document.getElementById('timeline-slider').value = progress * 100;
+                document.getElementById('time-current').innerText = formatTime(currentTime);
+            }
+        }
+
+        function formatTime(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        function setupUIControls() {
+            const playBtn = document.getElementById('btn-play-pause');
+            const playIcon = document.getElementById('play-icon');
+            const slider = document.getElementById('timeline-slider');
+            const replayBtn = document.getElementById('btn-replay');
+            const exportBtn = document.getElementById('btn-export');
+            const audioToggleBtn = document.getElementById('btn-audio-toggle');
+            const audioIcon = document.getElementById('audio-icon');
+
+            // Audio Toggle
+            audioToggleBtn.addEventListener('click', () => {
+                soundEnabled = !soundEnabled;
+                if (!soundEnabled && 'speechSynthesis' in window) speechSynth.cancel();
+                audioIcon.setAttribute('data-lucide', soundEnabled ? 'volume-2' : 'volume-x');
+                lucide.createIcons();
+            });
+
+            // Play / Pause
+            playBtn.addEventListener('click', () => {
+                initAudioSynth();
+                if (masterTL.isActive()) {
+                    masterTL.pause();
+                    if ('speechSynthesis' in window) speechSynth.pause();
+                    playIcon.setAttribute('data-lucide', 'play');
+                } else {
+                    if (masterTL.progress() === 1) masterTL.restart();
+                    else masterTL.play();
+                    if ('speechSynthesis' in window) speechSynth.resume();
+                    playIcon.setAttribute('data-lucide', 'pause');
+                }
+                lucide.createIcons();
+            });
+
+            // Seek Slider
+            slider.addEventListener('input', (e) => {
+                const val = e.target.value / 100;
+                masterTL.progress(val).pause();
+                if ('speechSynthesis' in window) speechSynth.cancel();
+                playIcon.setAttribute('data-lucide', 'play');
+                lucide.createIcons();
+            });
+
+            // Replay
+            replayBtn.addEventListener('click', () => {
+                masterTL.restart();
+                playIcon.setAttribute('data-lucide', 'pause');
+                lucide.createIcons();
+            });
+
+            // Video Export Button Event
+            exportBtn.addEventListener('click', startVideoExport);
+        }
+
+        function startVideoExport() {
+            if (isExporting) return;
+            isExporting = true;
+
+            const modal = document.getElementById('export-modal');
+            const progressBar = document.getElementById('export-progress-bar');
+            const statusText = document.getElementById('export-status');
+            
+            modal.classList.remove('hidden');
+
+            masterTL.progress(0).pause();
+            recordedChunks = [];
+
+            const canvas = renderer.domElement;
+            const stream = canvas.captureStream(60);
+
+            let mimeType = 'video/webm;codecs=vp9';
+            if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm';
+
+            mediaRecorder = new MediaRecorder(stream, {
+                mimeType: mimeType,
+                videoBitsPerSecond: 8000000
+            });
+
+            mediaRecorder.ondataavailable = (e) => {
+                if (e.data.size > 0) recordedChunks.push(e.data);
+            };
+
+            mediaRecorder.onstop = () => {
+                const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                const url = URL.createObjectURL(blob);
+                
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'Mall_Perfume_Search_3D.webm';
+                document.body.appendChild(a);
+                a.click();
+                
+                setTimeout(() => {
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(url);
+                    modal.classList.add('hidden');
+                    isExporting = false;
+                }, 500);
+            };
+
+            mediaRecorder.start();
+            masterTL.play();
+
+            const checkInterval = setInterval(() => {
+                const prog = masterTL.progress();
+                const percentage = Math.round(prog * 100);
+                
+                progressBar.style.width = `${percentage}%`;
+                statusText.innerText = `${percentage}% completed`;
+
+                if (prog >= 1.0) {
+                    clearInterval(checkInterval);
+                    setTimeout(() => mediaRecorder.stop(), 500);
+                }
+            }, 100);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // Initialize App on Window Load
+        window.onload = () => {
+            init3D();
+            animate();
+            masterTL.play();
+        };
+    </script>
+</body>
+</html>
